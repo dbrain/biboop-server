@@ -17,9 +17,15 @@ func (middleware *AppEngineWebMiddleware) Execute(ctx *soggy.Context) {
   aeCtx := appengine.NewContext(ctx.Req.Request)
   ctx.Env["aeCtx"] = aeCtx
 
-  currentUser := user.Current(aeCtx)
-  if currentUser != nil {
-    ctx.Env["currentUser"] = currentUser
+  googleUser := user.Current(aeCtx)
+  if googleUser != nil {
+    ctx.Env["googleUser"] = googleUser
+    biboopUser, err := GetOrCreateUser(aeCtx, googleUser.Email)
+    if err != nil {
+      ctx.Next(err)
+      return
+    }
+    ctx.Env["user"] = biboopUser
   }
 
   ctx.Next(nil)
@@ -34,9 +40,16 @@ func (middleware *AppEngineApiMiddleware) Execute(ctx *soggy.Context) {
 
   authHeader := ctx.Req.Request.Header.Get("Authorization");
   if strings.HasPrefix(authHeader, "Bearer ") {
-    user := loadUserDetails(ctx, authHeader, urlfetchClient)
-    if user != nil {
-      ctx.Env["user"] = user
+    googleUser := loadUserDetails(ctx, authHeader, urlfetchClient)
+    if googleUser != nil {
+      ctx.Env["googleUser"] = googleUser
+      biboopUser, err := GetOrCreateUser(aeCtx, googleUser["email"].(string))
+      if err != nil {
+        ctx.Next(err)
+        return
+      }
+
+      ctx.Env["user"] = biboopUser
       ctx.Next(nil)
     }
   } else {
@@ -55,12 +68,12 @@ func loadUserDetails(ctx *soggy.Context, authHeader string, urlfetchClient *http
     if err != nil {
       sendAuthFailure(ctx.Res, http.StatusUnauthorized, "authorization_parse_failed")
     } else {
-      var user map[string]interface{}
-      err := json.Unmarshal(body, &user)
+      var googleUser map[string]interface{}
+      err := json.Unmarshal(body, &googleUser)
       if err != nil {
         sendAuthFailure(ctx.Res, http.StatusUnauthorized, "authorization_body_parse_failed")
       } else {
-        return user
+        return googleUser
       }
     }
   }
@@ -82,13 +95,14 @@ func startWebServer() *soggy.Server {
   
   webServer.Get("/", WebIndex)
   webServer.Get("/dashboard", WebUserRequired, WebDashboard)
+  webServer.Get("/me", WebUserRequired, WebMe)
   webServer.Get("/logout", WebLogout)
   
   webServer.All(soggy.ANY_PATH, func (context *soggy.Context) (int, interface{}) {
     return 404, map[string]interface{} { "error": "Path not found" }
   })
   
-  webServer.Use(soggy.NewStaticServerMiddleware("/public"), &AppEngineWebMiddleware{}, webServer.Router)
+  webServer.Use(&AppEngineWebMiddleware{}, webServer.Router)
   return webServer
 }
 

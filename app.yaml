@@ -1,8 +1,26 @@
-application: biboop
+application: biboop-web
 version: 1
 runtime: go
 api_version: go1
 
 handlers:
-  - url: /.*
+  - url: /css
+    static_dir: public/css
+    secure: always
+    
+  - url: /img
+    static_dir: public/img
+    secure: always
+
+  - url: /js
+    static_dir: public/js
+    secure: always
+
+  - url: /(favicon.ico)
+    static_files: public/\1
+    upload: public/favicon.ico
+    secure: always
+
+  - url: .*
     script: _go_app
+    secure: always

@@ -6,5 +6,5 @@ import (
 )
 
 func ApiMe(ctx* soggy.Context) (int, interface{}) {
-  return http.StatusOK, ctx.Env["user"]
+  return http.StatusOK, map[string]interface{} { "googleUser": ctx.Env["googleUser"], "user": ctx.Env["user"] }
 }

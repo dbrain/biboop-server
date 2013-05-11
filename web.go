@@ -8,7 +8,7 @@ import (
 )
 
 func WebUserRequired(ctx *soggy.Context) {
-  if ctx.Env["currentUser"] == nil {
+  if ctx.Env["googleUser"] == nil {
     aeCtx := ctx.Env["aeCtx"].(appengine.Context)
     url, _ := user.LoginURL(aeCtx, ctx.Req.URL.Path)
     http.Redirect(ctx.Res, ctx.Req.Request, url, 302)
@@ -23,6 +23,10 @@ func WebIndex() (string, interface{}) {
 
 func WebDashboard(ctx *soggy.Context) (string, interface{}) {
   return "dashboard.html", map[string]interface{} {}
+}
+
+func WebMe(ctx *soggy.Context) (int, interface{}) {
+  return http.StatusOK, map[string]interface{} { "googleUser": ctx.Env["googleUser"], "user": ctx.Env["user"] }
 }
 
 func WebLogout(ctx *soggy.Context) {
