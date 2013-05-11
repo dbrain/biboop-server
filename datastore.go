@@ -9,8 +9,8 @@ import (
 )
 
 type User struct {
-  Email string
-  ServerKey string
+  Email string `json:"email,omitempty"`
+  ServerKey string `json:"serverKey,omitempty"`
 }
 
 func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
