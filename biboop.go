@@ -53,7 +53,7 @@ func (middleware *AppEngineApiMiddleware) Execute(ctx *soggy.Context) {
       ctx.Next(nil)
     }
   } else {
-    sendAuthFailure(ctx.Res, http.StatusUnauthorized, "unauthorized")
+    ctx.Next(nil)
   }
 }
 
@@ -92,23 +92,24 @@ func sendAuthFailure(res *soggy.Response, status int, reason string) {
 
 func startWebServer() *soggy.Server {
   webServer := soggy.NewServer("/")
-  
+
   webServer.Get("/", WebIndex)
   webServer.Get("/dashboard", WebUserRequired, WebDashboard)
   webServer.Get("/me", WebUserRequired, WebMe)
   webServer.Get("/logout", WebLogout)
-  
+
   webServer.All(soggy.ANY_PATH, func (context *soggy.Context) (int, interface{}) {
     return 404, map[string]interface{} { "error": "Path not found" }
   })
-  
+
   webServer.Use(&AppEngineWebMiddleware{}, webServer.Router)
   return webServer
 }
 
 func startApiServer() *soggy.Server {
   apiServer := soggy.NewServer("/api")
-  apiServer.Get("/me", ApiMe)
+  apiServer.Get("/me", ApiUserRequired, ApiMe)
+  apiServer.Post("/server/poll", ApiServerPoll)
 
   apiServer.Use(&AppEngineApiMiddleware{}, apiServer.Router)
   return apiServer

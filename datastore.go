@@ -13,6 +13,11 @@ type User struct {
   ServerKey string `json:"serverKey,omitempty"`
 }
 
+type Server struct {
+  UserKey *datastore.Key `json:"userKey,omitempty"`
+  ServerID string `json:"serverId,omitempty"`
+}
+
 func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
   key := datastore.NewKey(ctx, "User", email, 0, nil)
   biboopUser := User{}
@@ -28,4 +33,9 @@ func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
     }
   }
   return biboopUser, nil
+}
+
+func GetOrCreateServer(ctx appengine.Context, serverKey string, serverId string) (Server, error) {
+  server := Server{}
+  return server, nil
 }
