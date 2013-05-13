@@ -1,8 +1,10 @@
 package biboop
 
 import (
+  "appengine"
   "github.com/dbrain/soggy"
   "net/http"
+  "errors"
 )
 
 func ApiUserRequired(ctx *soggy.Context) (int, interface{}) {
@@ -27,5 +29,19 @@ func ApiServerPoll(ctx *soggy.Context) (int, interface{}) {
   if bodyType != soggy.BodyTypeJson {
     return http.StatusBadRequest, map[string]interface{} { "error": "JSON request expected" }
   }
-  return http.StatusOK, map[string]interface{} { "body": body }
+
+  var bodyMap = body.(map[string]interface{})
+
+  if bodyMap["serverId"] == nil || bodyMap["serverKey"] == nil {
+    ctx.Next(errors.New("serverId and serverKey are required fields"))
+    return 0, nil
+  }
+
+  server, err := GetOrCreateServerByServerKey(ctx.Env["aeCtx"].(appengine.Context), bodyMap["serverKey"].(string), bodyMap["serverId"].(string))
+  if err != nil {
+    ctx.Next(err)
+    return 0, nil
+  }
+
+  return http.StatusOK, map[string]interface{} { "server": server }
 }
