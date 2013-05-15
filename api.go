@@ -7,6 +7,14 @@ import (
   "errors"
 )
 
+type PollRequest struct {
+  Name string `json:"name,omitempty"`
+  Description string `json:"description,omitempty"`
+  MinimumPollTimeSec int `json:"minimumPollTimeSec,omitempty"`
+  ServerKey string `json:"serverKey,omitempty"`
+  ServerID string `json:"serverId,omitempty"`
+}
+
 func ApiUserRequired(ctx *soggy.Context) (int, interface{}) {
   if ctx.Env["googleUser"] == nil {
     return http.StatusUnauthorized, map[string]interface{} { "error": "This function requires authorization" }
@@ -20,7 +28,8 @@ func ApiMe(ctx* soggy.Context) (int, interface{}) {
 }
 
 func ApiServerPoll(ctx *soggy.Context) (int, interface{}) {
-  bodyType, body, err := ctx.Req.GetBody()
+  var pollRequest PollRequest
+  bodyType, _, err := ctx.Req.GetBody(&pollRequest)
   if err != nil {
     ctx.Next(err)
     return 0, nil
@@ -30,14 +39,13 @@ func ApiServerPoll(ctx *soggy.Context) (int, interface{}) {
     return http.StatusBadRequest, map[string]interface{} { "error": "JSON request expected" }
   }
 
-  var bodyMap = body.(map[string]interface{})
-
-  if bodyMap["serverId"] == nil || bodyMap["serverKey"] == nil {
+  if pollRequest.ServerID == "" || pollRequest.ServerKey == "" {
     ctx.Next(errors.New("serverId and serverKey are required fields"))
     return 0, nil
   }
 
-  server, err := GetOrCreateServerByServerKey(ctx.Env["aeCtx"].(appengine.Context), bodyMap["serverKey"].(string), bodyMap["serverId"].(string))
+  aeCtx := ctx.Env["aeCtx"].(appengine.Context)
+  server, err := GetOrCreateServerByServerKey(aeCtx, pollRequest.ServerKey, pollRequest.ServerID, pollRequest.Name, pollRequest.Description)
   if err != nil {
     ctx.Next(err)
     return 0, nil
