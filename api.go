@@ -11,7 +11,7 @@ type PollRequest struct {
   Name string `json:"name,omitempty"`
   Description string `json:"description,omitempty"`
   MinimumPollTimeSec int `json:"minimumPollTimeSec,omitempty"`
-  ServerKey string `json:"serverKey,omitempty"`
+  ServerAPIKey string `json:"serverKey,omitempty"`
   ServerID string `json:"serverId,omitempty"`
 }
 
@@ -39,13 +39,13 @@ func ApiServerPoll(ctx *soggy.Context) (int, interface{}) {
     return http.StatusBadRequest, map[string]interface{} { "error": "JSON request expected" }
   }
 
-  if pollRequest.ServerID == "" || pollRequest.ServerKey == "" {
-    ctx.Next(errors.New("serverId and serverKey are required fields"))
+  if pollRequest.ServerID == "" || pollRequest.ServerAPIKey == "" {
+    ctx.Next(errors.New("serverId and serverAPIKey are required fields"))
     return 0, nil
   }
 
   aeCtx := ctx.Env["aeCtx"].(appengine.Context)
-  server, err := GetOrCreateServerByServerKey(aeCtx, pollRequest.ServerKey, pollRequest.ServerID, pollRequest.Name, pollRequest.Description)
+  server, err := GetOrCreateServerForPollRequest(aeCtx, pollRequest)
   if err != nil {
     ctx.Next(err)
     return 0, nil

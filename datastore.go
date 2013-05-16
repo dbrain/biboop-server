@@ -20,7 +20,7 @@ type User struct {
 }
 
 type Server struct {
-  UserKey *datastore.Key `json:"userKey,omitempty"`
+  ServerAPIKey string `json:"serverAPIKey,omitempty"`
   ServerID string `json:"serverId,omitempty"`
   Name string `json:"name,omitempty"`
   Description string `json:"description,omitempty"`
@@ -43,24 +43,16 @@ func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
   return biboopUser, nil
 }
 
-func GetOrCreateServerByServerKey(ctx appengine.Context, serverKey string, serverId string, name string, description string) (Server, error) {
-  var user User
-  var server Server
-  var err error
-
-  if _, user, err = FindUserByServerKey(ctx, serverKey); err != nil {
-    return server, err
-  }
-
-  return GetOrCreateServer(ctx, user.Email, serverId, name, description)
+func GetOrCreateServerForPollRequest(ctx appengine.Context, pollRequest PollRequest) (Server, error) {
+  return GetOrCreateServer(ctx, pollRequest.ServerAPIKey, pollRequest.ServerID, pollRequest.Name, pollRequest.Description)
 }
 
-func GetOrCreateServer(ctx appengine.Context, userEmail string, serverId string, name string, description string) (Server, error) {
-  serverKey := datastore.NewKey(ctx, DatastoreKindServer, userEmail + "-" + serverId, 0, nil)
+func GetOrCreateServer(ctx appengine.Context, serverApiKey string, serverId string, name string, description string) (Server, error) {
+  serverKey := datastore.NewKey(ctx, DatastoreKindServer, serverApiKey + "-" + serverId, 0, nil)
   var server Server
   if err := datastore.Get(ctx, serverKey, &server); err != nil {
     if err == datastore.ErrNoSuchEntity {
-      server.UserKey = datastore.NewKey(ctx, DatastoreKindUser, userEmail, 0, nil)
+      server.ServerAPIKey = serverApiKey
       server.ServerID = serverId
       server.Name = name
       server.Description = description
