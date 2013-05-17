@@ -24,6 +24,7 @@ type Server struct {
   ServerID string `json:"serverId,omitempty"`
   Name string `json:"name,omitempty"`
   Description string `json:"description,omitempty"`
+  LastPollTime int64 `json:"lastPollTime,omitempty"`
 }
 
 func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
@@ -43,28 +44,24 @@ func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
   return biboopUser, nil
 }
 
-func GetOrCreateServerForPollRequest(ctx appengine.Context, pollRequest PollRequest) (Server, error) {
-  return GetOrCreateServer(ctx, pollRequest.ServerAPIKey, pollRequest.ServerID, pollRequest.Name, pollRequest.Description)
+func UpdateServerForPollRequest(ctx appengine.Context, pollRequest PollRequest) (Server, error) {
+  return UpdateServer(ctx, pollRequest.ServerAPIKey, pollRequest.ServerID, pollRequest.Name, pollRequest.Description)
 }
 
-func GetOrCreateServer(ctx appengine.Context, serverApiKey string, serverId string, name string, description string) (Server, error) {
-  serverKey := datastore.NewKey(ctx, DatastoreKindServer, serverApiKey + "-" + serverId, 0, nil)
+func UpdateServer(ctx appengine.Context, serverApiKey string, serverId string, name string, description string) (Server, error) {
   var server Server
-  if err := datastore.Get(ctx, serverKey, &server); err != nil {
-    if err == datastore.ErrNoSuchEntity {
-      server.ServerAPIKey = serverApiKey
-      server.ServerID = serverId
-      server.Name = name
-      server.Description = description
-      if _, err := datastore.Put(ctx, serverKey, &server); err != nil {
-        return server, err
-      }
-    } else {
-      return server, err
-    }
-  }
-  return server, nil
+  serverKey := datastore.NewKey(ctx, DatastoreKindServer, serverApiKey + "-" + serverId, 0, nil)
 
+  server.ServerAPIKey = serverApiKey
+  server.ServerID = serverId
+  server.Name = name
+  server.Description = description
+  server.LastPollTime = time.Now().UTC().Unix()
+  if _, err := datastore.Put(ctx, serverKey, &server); err != nil {
+    return server, err
+  }
+
+  return server, nil
 }
 
 func FindUserByServerKey(ctx appengine.Context, serverKey string) (*datastore.Key, User, error) {

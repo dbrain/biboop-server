@@ -45,7 +45,7 @@ func ApiServerPoll(ctx *soggy.Context) (int, interface{}) {
   }
 
   aeCtx := ctx.Env["aeCtx"].(appengine.Context)
-  server, err := GetOrCreateServerForPollRequest(aeCtx, pollRequest)
+  server, err := UpdateServerForPollRequest(aeCtx, pollRequest)
   if err != nil {
     ctx.Next(err)
     return 0, nil
