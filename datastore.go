@@ -3,6 +3,7 @@ package biboop
 import (
   "appengine"
   "appengine/datastore"
+  "appengine/memcache"
   "github.com/dbrain/soggy"
   "time"
   "strconv"
@@ -25,42 +26,75 @@ type Server struct {
   Name string `json:"name,omitempty"`
   Description string `json:"description,omitempty"`
   LastPollTime int64 `json:"lastPollTime,omitempty"`
+  PendingCommands int `json:"pendingCommands,omitempty"`
 }
 
 func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
-  key := datastore.NewKey(ctx, DatastoreKindUser, email, 0, nil)
   var biboopUser User
-  if err := datastore.Get(ctx, key, &biboopUser); err != nil {
-    if err == datastore.ErrNoSuchEntity {
-      biboopUser.Email = email
-      biboopUser.ServerKey = email + "-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" + soggy.UIDString()
-      if _, err := datastore.Put(ctx, key, &biboopUser); err != nil {
-        return biboopUser, err
-      }
-    } else {
+  cacheKey := "User-" + email
+  if item, err := memcache.Gob.Get(ctx, cacheKey, &biboopUser); err == memcache.ErrCacheMiss {
+    if biboopUser, err = getOrCreateUserWithoutCache(ctx, email); err != nil {
       return biboopUser, err
+    } else {
+      item = &memcache.Item{
+        Key: cacheKey,
+        Object: biboopUser,
+      }
+      memcache.Gob.Set(ctx, item)
     }
+  } else if err != nil {
+    return biboopUser, err
   }
   return biboopUser, nil
 }
 
-func UpdateServerForPollRequest(ctx appengine.Context, pollRequest PollRequest) (Server, error) {
-  return UpdateServer(ctx, pollRequest.ServerAPIKey, pollRequest.ServerID, pollRequest.Name, pollRequest.Description)
+func getOrCreateUserWithoutCache(ctx appengine.Context, email string) (User, error) {
+  var biboopUser User
+  key := datastore.NewKey(ctx, DatastoreKindUser, email, 0, nil)
+
+  err := datastore.RunInTransaction(ctx, func (ctx appengine.Context) error {
+    var err error
+    if err = datastore.Get(ctx, key, &biboopUser); err != nil {
+      if err == datastore.ErrNoSuchEntity {
+        biboopUser.Email = email
+        biboopUser.ServerKey = email + "-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" + soggy.UIDString()
+        if _, err := datastore.Put(ctx, key, &biboopUser); err != nil {
+          return err
+        }
+      }
+    }
+    return err
+  }, nil)
+
+  return biboopUser, err
 }
 
-func UpdateServer(ctx appengine.Context, serverApiKey string, serverId string, name string, description string) (Server, error) {
+func GetServerForPollRequest(ctx appengine.Context, pollRequest PollRequest) (Server, error) {
   var server Server
-  serverKey := datastore.NewKey(ctx, DatastoreKindServer, serverApiKey + "-" + serverId, 0, nil)
-
-  server.ServerAPIKey = serverApiKey
-  server.ServerID = serverId
-  server.Name = name
-  server.Description = description
-  server.LastPollTime = time.Now().UTC().Unix()
-  if _, err := datastore.Put(ctx, serverKey, &server); err != nil {
-    return server, err
+  cacheKey := "Server-" + pollRequest.ServerAPIKey + "-" + pollRequest.ServerID
+  if item, err := memcache.Gob.Get(ctx, cacheKey, &server); err == memcache.ErrCacheMiss {
+    if server, err = getServerForPollRequestWithoutCache(ctx, pollRequest); err != nil {
+      return server, err
+    } else {
+      item = &memcache.Item{
+        Key: cacheKey,
+        Object: server,
+      }
+      memcache.Gob.Set(ctx, item)
+    }
+  } else if err != nil {
+    return server, nil
   }
 
+  return server, nil
+}
+
+func getServerForPollRequestWithoutCache(ctx appengine.Context, pollRequest PollRequest) (Server, error) {
+  var server Server
+  serverKey := datastore.NewKey(ctx, DatastoreKindServer, pollRequest.ServerAPIKey + "-" + pollRequest.ServerID, 0, nil)
+  if err := datastore.Get(ctx, serverKey, &server); err != nil {
+    return server, err
+  }
   return server, nil
 }
 
