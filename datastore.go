@@ -14,14 +14,21 @@ var DatastoreKindUser = "User"
 var DatastoreKindServer = "Server"
 
 var ErrUserNotFound = errors.New("User not found")
+var ErrServerNotFound = errors.New("Server not found")
+
+type CacheUser struct {
+  Key *datastore.Key `json:"key,omitempty"`
+  Email string `json:"email,omitempty"`
+  ServerAPIKey string `json:"serverAPIKey,omitempty"`
+}
 
 type User struct {
   Email string `json:"email,omitempty"`
-  ServerKey string `json:"serverKey,omitempty"`
+  ServerAPIKey string `json:"serverAPIKey,omitempty"`
 }
 
 type Server struct {
-  ServerAPIKey string `json:"serverAPIKey,omitempty"`
+  UserKey *datastore.Key `json:"userKey,omitempty"`
   ServerID string `json:"serverId,omitempty"`
   Name string `json:"name,omitempty"`
   Description string `json:"description,omitempty"`
@@ -29,13 +36,19 @@ type Server struct {
   PendingCommands int `json:"pendingCommands,omitempty"`
 }
 
-func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
-  var biboopUser User
+func GetOrCreateUser(ctx appengine.Context, email string) (CacheUser, error) {
+  var biboopUser CacheUser
+  var userKey *datastore.Key
+
   cacheKey := "User-" + email
   if item, err := memcache.Gob.Get(ctx, cacheKey, &biboopUser); err == memcache.ErrCacheMiss {
-    if biboopUser, err = getOrCreateUserWithoutCache(ctx, email); err != nil {
+    var dbUser User
+    if userKey, dbUser, err = getOrCreateUserWithoutCache(ctx, email); err != nil {
       return biboopUser, err
     } else {
+      biboopUser.Key = userKey
+      biboopUser.Email = dbUser.Email
+      biboopUser.ServerAPIKey = dbUser.ServerAPIKey
       item = &memcache.Item{
         Key: cacheKey,
         Object: biboopUser,
@@ -48,32 +61,42 @@ func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
   return biboopUser, nil
 }
 
-func getOrCreateUserWithoutCache(ctx appengine.Context, email string) (User, error) {
+func getOrCreateUserWithoutCache(ctx appengine.Context, email string) (*datastore.Key, User, error) {
   var biboopUser User
-  key := datastore.NewKey(ctx, DatastoreKindUser, email, 0, nil)
+  var userKey *datastore.Key
+  var err error
 
-  err := datastore.RunInTransaction(ctx, func (ctx appengine.Context) error {
-    var err error
-    if err = datastore.Get(ctx, key, &biboopUser); err != nil {
-      if err == datastore.ErrNoSuchEntity {
-        biboopUser.Email = email
-        biboopUser.ServerKey = email + "-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" + soggy.UIDString()
-        if _, err := datastore.Put(ctx, key, &biboopUser); err != nil {
-          return err
-        }
-      }
+  query := datastore.NewQuery(DatastoreKindUser).
+         Filter("Email =", email).
+         Limit(1)
+
+  for cursor := query.Run(ctx); ; {
+    if cursorKey, err := cursor.Next(&biboopUser); err == datastore.Done {
+      break
+    } else if err != nil {
+      return userKey, biboopUser, err
+    } else {
+      userKey = cursorKey
     }
-    return err
-  }, nil)
+  }
 
-  return biboopUser, err
+  if userKey == nil {
+    userKey = datastore.NewIncompleteKey(ctx, DatastoreKindUser, nil)
+    biboopUser.Email = email
+    biboopUser.ServerAPIKey = email + "-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" + soggy.UIDString()
+    if userKey, err = datastore.Put(ctx, userKey, &biboopUser); err != nil {
+      return userKey, biboopUser, err
+    }
+  }
+
+  return userKey, biboopUser, err
 }
 
-func GetServerForPollRequest(ctx appengine.Context, pollRequest PollRequest) (Server, error) {
+func GetServerForPollRequest(ctx appengine.Context, user CacheUser, pollRequest PollRequest) (Server, error) {
   var server Server
-  cacheKey := "Server-" + pollRequest.ServerAPIKey + "-" + pollRequest.ServerID
+  cacheKey := "Server-" + user.Key.Encode() + "-" + pollRequest.ServerID
   if item, err := memcache.Gob.Get(ctx, cacheKey, &server); err == memcache.ErrCacheMiss {
-    if server, err = getServerForPollRequestWithoutCache(ctx, pollRequest); err != nil {
+    if server, err = getServerForPollRequestWithoutCache(ctx, user, pollRequest); err != nil {
       return server, err
     } else {
       item = &memcache.Item{
@@ -83,41 +106,79 @@ func GetServerForPollRequest(ctx appengine.Context, pollRequest PollRequest) (Se
       memcache.Gob.Set(ctx, item)
     }
   } else if err != nil {
-    return server, nil
-  }
-
-  return server, nil
-}
-
-func getServerForPollRequestWithoutCache(ctx appengine.Context, pollRequest PollRequest) (Server, error) {
-  var server Server
-  serverKey := datastore.NewKey(ctx, DatastoreKindServer, pollRequest.ServerAPIKey + "-" + pollRequest.ServerID, 0, nil)
-  if err := datastore.Get(ctx, serverKey, &server); err != nil {
     return server, err
   }
+
   return server, nil
 }
 
-func FindUserByServerKey(ctx appengine.Context, serverKey string) (*datastore.Key, User, error) {
+func getServerForPollRequestWithoutCache(ctx appengine.Context, user CacheUser, pollRequest PollRequest) (Server, error) {
+  var server Server
+
+  query := datastore.NewQuery(DatastoreKindServer).
+           Filter("UserKey =", user.Key).
+           Filter("ServerID =", pollRequest.ServerID).
+           Limit(1)
+
+  for cursor := query.Run(ctx); ; {
+    if _, err := cursor.Next(&server); err == datastore.Done {
+      break
+    } else if err != nil {
+      return server, err
+    }
+  }
+
+  if server.ServerID == "" {
+    return server, ErrServerNotFound
+  }
+
+  return server, nil
+}
+
+func FindUserByServerAPIKey(ctx appengine.Context, serverAPIKey string) (CacheUser, error) {
+  var biboopUser CacheUser
+  var userKey *datastore.Key
+
+  cacheKey := "User-" + serverAPIKey
+  if item, err := memcache.Gob.Get(ctx, cacheKey, &biboopUser); err == memcache.ErrCacheMiss {
+    var dbUser User
+    if userKey, dbUser, err = findUserByServerAPIKeyWithoutCache(ctx, serverAPIKey); err != nil {
+      return biboopUser, err
+    } else {
+      biboopUser.Key = userKey
+      biboopUser.Email = dbUser.Email
+      biboopUser.ServerAPIKey = dbUser.ServerAPIKey
+      item = &memcache.Item{
+        Key: cacheKey,
+        Object: biboopUser,
+      }
+      memcache.Gob.Set(ctx, item)
+    }
+  } else if err != nil {
+    return biboopUser, err
+  }
+  return biboopUser, nil
+}
+
+func findUserByServerAPIKeyWithoutCache(ctx appengine.Context, serverAPIKey string) (*datastore.Key, User, error) {
   var user User
   var userKey *datastore.Key
 
   query := datastore.NewQuery(DatastoreKindUser).
-           Filter("ServerKey =", serverKey).
+           Filter("ServerAPIKey =", serverAPIKey).
            Limit(1)
 
   for cursor := query.Run(ctx); ; {
-    var err error
-    userKey, err = cursor.Next(&user)
-    if err == datastore.Done {
+    if cursorKey, err := cursor.Next(&user); err == datastore.Done {
       break
-    }
-    if err != nil {
-      return userKey, user, err
+    } else if err != nil {
+      return cursorKey, user, err
+    } else {
+      userKey = cursorKey
     }
   }
 
-  if user.Email == "" {
+  if userKey == nil {
     return userKey, user, ErrUserNotFound
   }
 

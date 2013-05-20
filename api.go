@@ -29,6 +29,10 @@ func ApiMe(ctx* soggy.Context) (int, interface{}) {
 
 func ApiServerPoll(ctx *soggy.Context) (int, interface{}) {
   var pollRequest PollRequest
+  var server Server
+  var err error
+  var user CacheUser
+
   bodyType, _, err := ctx.Req.GetBody(&pollRequest)
   if err != nil {
     ctx.Next(err)
@@ -45,10 +49,14 @@ func ApiServerPoll(ctx *soggy.Context) (int, interface{}) {
   }
 
   aeCtx := ctx.Env["aeCtx"].(appengine.Context)
-  server, err := GetServerForPollRequest(aeCtx, pollRequest)
-  if err != nil {
+  if user, err = FindUserByServerAPIKey(aeCtx, pollRequest.ServerAPIKey); err != nil {
     ctx.Next(err)
     return 0, nil
+  } else {
+    if server, err = GetServerForPollRequest(aeCtx, user, pollRequest); err != nil {
+      ctx.Next(err)
+      return 0, nil
+    }
   }
 
   return http.StatusOK, map[string]interface{} { "server": server }
