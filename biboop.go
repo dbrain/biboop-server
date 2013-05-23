@@ -110,6 +110,13 @@ func startApiServer() *soggy.Server {
   apiServer := soggy.NewServer("/api")
   apiServer.Get("/me", ApiUserRequired, ApiMe)
   apiServer.Post("/server/poll", ApiServerPoll)
+  apiServer.Post("/server/update", ApiServerUpdate)
+  apiServer.Get("/servers", ApiGetServers)
+  apiServer.Post("/commands", ApiCreateCommand)
+
+  apiServer.All(soggy.ANY_PATH, func (context *soggy.Context) (int, interface{}) {
+    return 404, map[string]interface{} { "error": "Path not found" }
+  })
 
   apiServer.Use(&AppEngineApiMiddleware{}, apiServer.Router)
   return apiServer
