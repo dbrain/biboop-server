@@ -25,7 +25,7 @@ type User struct {
 }
 
 type Server struct {
-  ID int64 `json:"id,omitempty" datastore"-"`
+  ID int64 `json:"id,omitempty" datastore:"-"`
   UserID int64 `json:"userId,omitempty"`
   ServerID string `json:"serverId,omitempty"`
   Name string `json:"name,omitempty"`
@@ -42,7 +42,7 @@ type CommandParam struct {
 }
 
 type Command struct {
-  ID int64 `json:"id,omitempty" datastore"-"`
+  ID int64 `json:"id,omitempty" datastore:"-"`
   UserID int64 `json:"userId,omitempty"`
   Private bool `json:"private,omitempty"`
   Name string `json:"name,omitempty"`
