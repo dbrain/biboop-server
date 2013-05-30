@@ -24,7 +24,7 @@ type UpdateRequest struct {
 }
 
 type CreateCommandRequest struct {
-  Private bool `json:"private,omitempty"`
+  PublicCommand bool `json:"publicCommand,omitempty"`
   Name string `json:"name,omitempty"`
   Description string `json:"description,omitempty"`
   Command string `json:"command,omitempty"`

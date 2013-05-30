@@ -112,6 +112,7 @@ func startApiServer() *soggy.Server {
   apiServer.Post("/server/poll", ApiServerPoll)
   apiServer.Post("/server/update", ApiServerUpdate)
   apiServer.Get("/servers", ApiGetServers)
+  apiServer.Get("/commands", ApiGetCommands)
   apiServer.Post("/commands", ApiCreateCommand)
 
   apiServer.All(soggy.ANY_PATH, func (context *soggy.Context) (int, interface{}) {

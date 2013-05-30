@@ -32,11 +32,13 @@ type Server struct {
   Description string `json:"description,omitempty"`
   LastPollTime int64 `json:"lastPollTime,omitempty"`
   PendingCommands int `json:"pendingCommands,omitempty"`
-  AvailableCommands []*datastore.Key `json:"AvailableCommands,omitempty"`
+  AvailableCommands []*datastore.Key `json:"-"`
 }
 
 type CommandParam struct {
   Name string `json:"name,omitempty"`
+  Type string `json:"type,omitempty"`
+  PossibleValues []string `json:"PossibleValues,omitempty"`
   Description string `json:"description,omitempty"`
   DefaultValue string `json:"defaultValue,omitempty"`
 }
@@ -44,11 +46,11 @@ type CommandParam struct {
 type Command struct {
   ID int64 `json:"id,omitempty" datastore:"-"`
   UserID int64 `json:"userId,omitempty"`
-  Private bool `json:"private,omitempty"`
+  PublicCommand bool `json:"publicCommand,omitempty"`
   Name string `json:"name,omitempty"`
   Description string `json:"description,omitempty"`
   Command string `json:"command,omitempty"`
-  Params []CommandParam `json:"command,omitempty"`
+  Params []CommandParam `json:"params,omitempty"`
 }
 
 func GetOrCreateUser(ctx appengine.Context, email string) (User, error) {
@@ -260,6 +262,7 @@ func CreateCommandNoCache(ctx appengine.Context, user User, commandRequest Creat
   var command Command
   commandKey := datastore.NewIncompleteKey(ctx, DatastoreKindCommand, nil)
   command.UserID = user.ID
+  command.PublicCommand = commandRequest.PublicCommand
   command.Name = commandRequest.Name
   command.Description = commandRequest.Description
   command.Command = commandRequest.Command
@@ -289,4 +292,8 @@ func GetCommandsNoCache(ctx appengine.Context, user User) ([]Command, error) {
   }
 
   return commands, nil
+}
+
+func AddCommandToServersNoCache(ctx appengine.Context, user User, serverIds []int64) (error) {
+  return nil
 }
