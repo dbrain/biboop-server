@@ -111,9 +111,9 @@ func startApiServer() *soggy.Server {
   apiServer.Get("/me", ApiUserRequired, ApiMe)
   apiServer.Post("/server/poll", ApiServerPoll)
   apiServer.Post("/server/update", ApiServerUpdate)
-  apiServer.Get("/servers", ApiGetServers)
-  apiServer.Get("/commands", ApiGetCommands)
-  apiServer.Post("/commands", ApiCreateCommand)
+  apiServer.Get("/servers", ApiUserRequired, ApiGetServers)
+  apiServer.Get("/commands", ApiUserRequired, ApiGetCommands)
+  apiServer.Post("/commands", ApiUserRequired, ApiCreateCommand)
 
   apiServer.All(soggy.ANY_PATH, func (context *soggy.Context) (int, interface{}) {
     return 404, map[string]interface{} { "error": "Path not found" }
